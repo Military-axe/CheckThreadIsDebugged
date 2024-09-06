@@ -2,6 +2,8 @@
 #include <winternl.h>
 #include "util.h"
 
+/// @brief 动态从ntdll.dll模块种获取NtQuerySystemInformation函数地址
+/// @return 如果获取成功返回指向NtQuerySystemInformation函数的指针，如果获取失败则返回nullptr
 NtQuerySystemInformationPtr GetNtQuerySystemInformationPtr()
 {
     HMODULE hNtdll = LoadLibraryA("ntdll.dll");

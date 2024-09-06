@@ -8,14 +8,17 @@ CurrentThreadStatus::CurrentThreadStatus()
 }
 
 /// @brief 检查当前线程句柄是否被外部进程打开
+/// 如果被外部进程打开则记录打开进程的pid到类的open_list属性中
 /// @return
 /// 如果句柄被打开，则返回true
 /// 如果句柄被关闭，则返回false
 bool CurrentThreadStatus::IsHandleOpenedByExternalProcess()
 {
-    NtQuerySystemInformationPtr NtQuerySystemInformation =
-        (NtQuerySystemInformationPtr)GetProcAddress(
-            GetModuleHandleA("ntdll.dll"), "NtQuerySystemInformation");
+    NtQuerySystemInformationPtr NtQuerySystemInformation = GetNtQuerySystemInformationPtr();
+    if (NtQuerySystemInformation == nullptr)
+    {
+        return false;
+    }
 
     if (!NtQuerySystemInformation)
     {
@@ -27,23 +30,20 @@ bool CurrentThreadStatus::IsHandleOpenedByExternalProcess()
 
     while (true)
     {
-        handleInfo =
-            static_cast<PSYSTEM_HANDLE_INFORMATION_EX>(malloc(handleInfoSize));
+        handleInfo = static_cast<PSYSTEM_HANDLE_INFORMATION_EX>(malloc(handleInfoSize));
         if (!handleInfo)
+        {
             return false;
+        }
 
-        NTSTATUS status =
-            NtQuerySystemInformation(
-                SystemExtendedHandleInformation,
-                handleInfo,
-                handleInfoSize,
-                &handleInfoSize);
+        NTSTATUS status = NtQuerySystemInformation(SystemExtendedHandleInformation, handleInfo, handleInfoSize, &handleInfoSize);
 
         if (status == STATUS_INFO_LENGTH_MISMATCH)
         {
             free(handleInfo);
             continue;
         }
+
         if (status != 0)
         {
             free(handleInfo);
@@ -52,10 +52,10 @@ bool CurrentThreadStatus::IsHandleOpenedByExternalProcess()
         break;
     }
 
-    DWORD currentProcessId = GetCurrentProcessId();
-    BOOL isOpenedByExternalProcess = false;
+    uint64_t currentProcessId = GetCurrentProcessId();
+    bool isOpenedByExternalProcess = false;
 
-    for (SIZE_T i = 0; i < handleInfo->handle_count; i++)
+    for (uint32_t i = 0; i < handleInfo->handle_count; i++)
     {
         SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX handle = handleInfo->handles[i];
         if (handle.pid != currentProcessId &&
