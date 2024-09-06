@@ -16,7 +16,7 @@ public:
 public:
     CurrentThreadStatus();
     ~CurrentThreadStatus();
-    
+
     static HANDLE GetRealThreadHandle();
-    bool   IsHandleOpenedByExternalProcess();
+    bool IsHandleOpenedByExternalProcess();
 };

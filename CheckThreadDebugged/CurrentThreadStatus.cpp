@@ -17,48 +17,54 @@ bool CurrentThreadStatus::IsHandleOpenedByExternalProcess()
         (NtQuerySystemInformationPtr)GetProcAddress(
             GetModuleHandleA("ntdll.dll"), "NtQuerySystemInformation");
 
-    if (!NtQuerySystemInformation) {
+    if (!NtQuerySystemInformation)
+    {
         return false;
     }
 
-    ULONG                         handleInfoSize = 0x10000;
-    PSYSTEM_HANDLE_INFORMATION_EX handleInfo     = nullptr;
+    ULONG handleInfoSize = 0x10000;
+    PSYSTEM_HANDLE_INFORMATION_EX handleInfo = nullptr;
 
-    while (true) {
+    while (true)
+    {
         handleInfo =
             static_cast<PSYSTEM_HANDLE_INFORMATION_EX>(malloc(handleInfoSize));
-        if (!handleInfo) return false;
+        if (!handleInfo)
+            return false;
 
         NTSTATUS status =
             NtQuerySystemInformation(
                 SystemExtendedHandleInformation,
-                                     handleInfo,
-                                     handleInfoSize,
-                                     &handleInfoSize);
+                handleInfo,
+                handleInfoSize,
+                &handleInfoSize);
 
-        if (status == STATUS_INFO_LENGTH_MISMATCH) {
+        if (status == STATUS_INFO_LENGTH_MISMATCH)
+        {
             free(handleInfo);
             continue;
         }
-        if (status != 0) {
+        if (status != 0)
+        {
             free(handleInfo);
             return false;
         }
         break;
     }
 
-    DWORD currentProcessId          = GetCurrentProcessId();
-    BOOL  isOpenedByExternalProcess = false;
+    DWORD currentProcessId = GetCurrentProcessId();
+    BOOL isOpenedByExternalProcess = false;
 
-    for (SIZE_T i = 0; i < handleInfo->handle_count; i++) {
+    for (SIZE_T i = 0; i < handleInfo->handle_count; i++)
+    {
         SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX handle = handleInfo->handles[i];
         if (handle.pid != currentProcessId &&
             handle.handle_value == reinterpret_cast<uint64_t>(this->_real_thread_handle) &&
-            handle.pid > 4) {
-            
+            handle.pid > 4)
+        {
+
             this->open_list.push_back(handle.pid);
             isOpenedByExternalProcess = true;
-
         }
     }
 
@@ -73,9 +79,9 @@ bool CurrentThreadStatus::IsHandleOpenedByExternalProcess()
 HANDLE CurrentThreadStatus::GetRealThreadHandle()
 {
     // 获取当前线程的伪句柄
-    HANDLE hThread     = GetCurrentThread();
+    HANDLE hThread = GetCurrentThread();
     HANDLE hRealHandle = nullptr;
-    HANDLE hProcess    = GetCurrentProcess();
+    HANDLE hProcess = GetCurrentProcess();
 
     if (!DuplicateHandle(hProcess,
                          hThread,
@@ -83,7 +89,8 @@ HANDLE CurrentThreadStatus::GetRealThreadHandle()
                          &hRealHandle,
                          0,
                          false,
-                         DUPLICATE_SAME_ACCESS)) {
+                         DUPLICATE_SAME_ACCESS))
+    {
         return nullptr;
     }
 
@@ -92,7 +99,8 @@ HANDLE CurrentThreadStatus::GetRealThreadHandle()
 
 CurrentThreadStatus::~CurrentThreadStatus()
 {
-    if (this->_real_thread_handle) {
+    if (this->_real_thread_handle)
+    {
         CloseHandle(this->_real_thread_handle);
     }
 
