@@ -14,6 +14,7 @@ CurrentThreadStatus::CurrentThreadStatus()
 /// 如果句柄被关闭，则返回false
 bool CurrentThreadStatus::IsHandleOpenedByExternalProcess()
 {
+    NtQueryInformationProcessPtr NtQueryInformationProcess = GetNtQueryInformationProcess();
     NtQuerySystemInformationPtr NtQuerySystemInformation = GetNtQuerySystemInformationPtr();
     if (NtQuerySystemInformation == nullptr)
     {
@@ -58,11 +59,17 @@ bool CurrentThreadStatus::IsHandleOpenedByExternalProcess()
     for (uint32_t i = 0; i < handleInfo->handle_count; i++)
     {
         SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX handle = handleInfo->handles[i];
+        uint32_t top_id = GetTopLevelParentProcessId(handle.pid, NtQueryInformationProcess);
+        if (top_id == 0)
+        {
+            continue;
+        }
+
         if (handle.pid != currentProcessId &&
             handle.handle_value == reinterpret_cast<uint64_t>(this->_real_thread_handle) &&
-            handle.pid > 4)
+            top_id > 4)
         {
-
+            std::cout << handle.pid << std::endl;
             this->open_list.push_back(handle.pid);
             isOpenedByExternalProcess = true;
         }

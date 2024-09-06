@@ -38,6 +38,7 @@ typedef NTSTATUS(NTAPI *NtQuerySystemInformationPtr)(
     ULONG SystemInformationLength,
     PULONG ReturnLength);
 
+bool EnablePrivileges();
 NtQueryInformationProcessPtr GetNtQueryInformationProcess();
 NtQuerySystemInformationPtr GetNtQuerySystemInformationPtr();
 bool GetProcessNameFromId(uint32_t processId, wchar_t *processName, uint32_t size);

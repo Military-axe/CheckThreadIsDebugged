@@ -1,14 +1,30 @@
 ﻿#include <winternl.h>
 #include <iostream>
 #include "CurrentThreadStatus.h"
+#include "util.h"
 
 int main()
 {
+    bool status = EnablePrivileges();
+    if (status == false)
+    {
+        std::cout << "set privilege value failed; error: " << GetLastError() << std::endl;
+        return -1;
+    }
+
     CurrentThreadStatus current_thread_status;
 
-    if (current_thread_status.IsHandleOpenedByExternalProcess())
+    while (true)
     {
-        std::cout << "Current thread is opened by external process." << std::endl;
+        if (current_thread_status.IsHandleOpenedByExternalProcess())
+        {
+            std::cout << "Current thread is opened by external process." << std::endl;
+        }
+        else
+        {
+            std::cout << "Current thread is anti debug." << std::endl;
+        }
+
+        Sleep(5000);
     }
-    Sleep(5000);
 }

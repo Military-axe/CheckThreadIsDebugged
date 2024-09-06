@@ -35,6 +35,7 @@ bool GetProcessNameFromId(uint32_t processId, wchar_t *processName, uint32_t siz
         PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, processId);
     if (hProcess == nullptr)
     {
+        // std::cerr << "open process " << processId << " failed; error: " << GetLastError() << std::endl;
         return false;
     }
 
@@ -80,7 +81,7 @@ uint32_t GetParentProcessId(uint32_t processId, NtQueryInformationProcessPtr NtQ
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, processId);
     if (!hProcess)
     {
-        std::cerr << "Failed to open process with ID: " << processId << std::endl;
+        // std::cerr << "Failed to open process with ID: " << processId  << "; error: " << GetLastError() << std::endl;
         return 0;
     }
 
@@ -101,6 +102,7 @@ uint32_t GetParentProcessId(uint32_t processId, NtQueryInformationProcessPtr NtQ
 /// @brief 传入子进程id，获取对应的最顶级的父进程ID
 /// @param processId 子进程id
 /// @return 如果获取失败，返回0；成功返回父进程id
+/// @todo TODO: 更改令牌权限
 uint32_t GetTopLevelParentProcessId(uint32_t processId, NtQueryInformationProcessPtr NtQueryInformationProcess)
 {
     uint32_t currentProcessId = processId;
@@ -118,4 +120,30 @@ uint32_t GetTopLevelParentProcessId(uint32_t processId, NtQueryInformationProces
     }
 
     return parentProcessId;
+}
+
+bool WINAPI EnablePrivileges()
+{
+    HANDLE hToken;
+    TOKEN_PRIVILEGES tkp;
+
+    if (!OpenProcessToken(GetCurrentProcess(),
+                          TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken))
+    {
+        return false;
+    }
+
+    LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &tkp.Privileges[0].Luid);
+
+    tkp.PrivilegeCount = 1;
+    tkp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+
+    AdjustTokenPrivileges(hToken, FALSE, &tkp, 0, (PTOKEN_PRIVILEGES)NULL, 0);
+
+    if (GetLastError() != ERROR_SUCCESS)
+    {
+        return false;
+    }
+
+    return true;
 }
