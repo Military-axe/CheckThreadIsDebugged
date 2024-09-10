@@ -15,7 +15,7 @@ CurrentThreadStatus::CurrentThreadStatus()
 bool CurrentThreadStatus::IsHandleOpenedByExternalProcess()
 {
     NtQueryInformationProcessPtr NtQueryInformationProcess = GetNtQueryInformationProcess();
-    NtQuerySystemInformationPtr NtQuerySystemInformation = GetNtQuerySystemInformationPtr();
+    NtQuerySystemInformationPtr NtQuerySystemInformation = GetNtQuerySystemInformation();
     if (NtQuerySystemInformation == nullptr)
     {
         return false;
@@ -27,47 +27,53 @@ bool CurrentThreadStatus::IsHandleOpenedByExternalProcess()
     }
 
     ULONG handleInfoSize = 0x10000;
+    NTSTATUS status = 0;
     PSYSTEM_HANDLE_INFORMATION_EX handleInfo = nullptr;
 
     while (true)
     {
-        handleInfo = static_cast<PSYSTEM_HANDLE_INFORMATION_EX>(malloc(handleInfoSize));
-        if (!handleInfo)
+        handleInfo = reinterpret_cast<PSYSTEM_HANDLE_INFORMATION_EX>(malloc(handleInfoSize));
+        if (handleInfo == nullptr)
         {
+            std::cerr << "malloc PSYSTEM_HANDLE_INFORMATION_EX falied" << std::endl;
             return false;
         }
 
-        NTSTATUS status = NtQuerySystemInformation(SystemExtendedHandleInformation, handleInfo, handleInfoSize, &handleInfoSize);
-
+        status = NtQuerySystemInformation(SystemExtendedHandleInformation, handleInfo, handleInfoSize, &handleInfoSize);
         if (status == STATUS_INFO_LENGTH_MISMATCH)
         {
             free(handleInfo);
             continue;
         }
-
-        if (status != 0)
+        else if (status == 0)
         {
+            break;
+        }
+        else
+        {
+            std::cerr << "NtQuerySystemInformation failed status: " << status << std::endl;
             free(handleInfo);
             return false;
         }
-        break;
     }
 
     uint64_t currentProcessId = GetCurrentProcessId();
     bool isOpenedByExternalProcess = false;
+    HANDLE queryProcessId = nullptr;
 
-    for (uint32_t i = 0; i < handleInfo->handle_count; i++)
+    std::cout << handleInfo->handle_count << std::endl;
+
+    for (auto i = 0; i < handleInfo->handle_count; ++i)
     {
         SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX handle = handleInfo->handles[i];
-        uint32_t top_id = GetTopLevelParentProcessId(handle.pid, NtQueryInformationProcess);
-        if (top_id == 0)
+
+        if (handle.pid == currentProcessId ||
+            handle.handle_value != reinterpret_cast<uint64_t>(this->_real_thread_handle))
         {
             continue;
         }
 
-        if (handle.pid != currentProcessId &&
-            handle.handle_value == reinterpret_cast<uint64_t>(this->_real_thread_handle) &&
-            top_id > 4)
+        if (GetTopLevelParentProcessId(handle.pid, NtQueryInformationProcess) > 4)
         {
             std::cout << handle.pid << std::endl;
             this->open_list.push_back(handle.pid);

@@ -38,9 +38,10 @@ typedef NTSTATUS(NTAPI *NtQuerySystemInformationPtr)(
     ULONG SystemInformationLength,
     PULONG ReturnLength);
 
-bool EnablePrivileges();
+bool SetPrivilege(HANDLE hToken, LPCTSTR lpszPrivilege, bool bEnablePrivilege);
+bool CheckPrivilege(HANDLE hToken, LPCTSTR lpszPrivilege);
 NtQueryInformationProcessPtr GetNtQueryInformationProcess();
-NtQuerySystemInformationPtr GetNtQuerySystemInformationPtr();
+NtQuerySystemInformationPtr GetNtQuerySystemInformation();
 bool GetProcessNameFromId(uint32_t processId, wchar_t *processName, uint32_t size);
 uint32_t GetParentProcessId(uint32_t processId, NtQueryInformationProcessPtr NtQueryInformationProcess);
 uint32_t GetTopLevelParentProcessId(uint32_t processId, NtQueryInformationProcessPtr NtQueryInformationProcess);

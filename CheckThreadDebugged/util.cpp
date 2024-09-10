@@ -4,7 +4,7 @@
 
 /// @brief 动态从ntdll.dll模块种获取NtQuerySystemInformation函数地址
 /// @return 如果获取成功返回指向NtQuerySystemInformation函数的指针，如果获取失败则返回nullptr
-NtQuerySystemInformationPtr GetNtQuerySystemInformationPtr()
+NtQuerySystemInformationPtr GetNtQuerySystemInformation()
 {
     HMODULE hNtdll = LoadLibraryA("ntdll.dll");
     if (!hNtdll)
@@ -13,7 +13,7 @@ NtQuerySystemInformationPtr GetNtQuerySystemInformationPtr()
         return nullptr;
     }
 
-    NtQuerySystemInformationPtr NtQuerySystemInformation = (NtQuerySystemInformationPtr)GetProcAddress(hNtdll, "NtQuerySystemInformation");
+    NtQuerySystemInformationPtr NtQuerySystemInformation = reinterpret_cast<NtQuerySystemInformationPtr>(GetProcAddress(hNtdll, "NtQuerySystemInformation"));
     if (!NtQuerySystemInformation)
     {
         std::cerr << "Failed to load NtQuerySystemInformation" << std::endl;
@@ -61,7 +61,7 @@ NtQueryInformationProcessPtr GetNtQueryInformationProcess()
         return nullptr;
     }
 
-    NtQueryInformationProcessPtr NtQueryInformationProcess = (NtQueryInformationProcessPtr)GetProcAddress(hNtdll, "NtQueryInformationProcess");
+    NtQueryInformationProcessPtr NtQueryInformationProcess = reinterpret_cast<NtQueryInformationProcessPtr>(GetProcAddress(hNtdll, "NtQueryInformationProcess"));
     if (!NtQueryInformationProcess)
     {
         std::cerr << "Failed to get NtQueryInformationProcess address" << std::endl;
@@ -72,10 +72,10 @@ NtQueryInformationProcessPtr GetNtQueryInformationProcess()
     return NtQueryInformationProcess;
 }
 
-/// @brief 传入子进程id查询进程的父进程ID
-/// @param processId
-/// @param NtQueryInformationProcess
-/// @return
+/// @brief 传入子进程id，查询进程的父进程ID
+/// @param processId 子进程id
+/// @param NtQueryInformationProcess，NtQueryInformationProcess函数指针
+/// @return 如果查询成功返回父进程ID，如果查询失败返回0
 uint32_t GetParentProcessId(uint32_t processId, NtQueryInformationProcessPtr NtQueryInformationProcess)
 {
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, processId);
@@ -99,10 +99,9 @@ uint32_t GetParentProcessId(uint32_t processId, NtQueryInformationProcessPtr NtQ
     return static_cast<uint32_t>(pbi.UniqueProcessId);
 }
 
-/// @brief 传入子进程id，获取对应的最顶级的父进程ID
+/// @brief 传入子进程id，获取对应的最顶级的父进程ID；需要调试权限令牌
 /// @param processId 子进程id
-/// @return 如果获取失败，返回0；成功返回父进程id
-/// @todo TODO: 更改令牌权限
+/// @return 如果获取失败，返回原本进程ID；成功返回父进程id
 uint32_t GetTopLevelParentProcessId(uint32_t processId, NtQueryInformationProcessPtr NtQueryInformationProcess)
 {
     uint32_t currentProcessId = processId;
@@ -119,31 +118,61 @@ uint32_t GetTopLevelParentProcessId(uint32_t processId, NtQueryInformationProces
         currentProcessId = newParentProcessId;
     }
 
-    return parentProcessId;
+    return currentProcessId;
 }
 
-bool WINAPI EnablePrivileges()
+bool SetPrivilege(HANDLE hToken, LPCTSTR lpszPrivilege, bool bEnablePrivilege)
 {
-    HANDLE hToken;
-    TOKEN_PRIVILEGES tkp;
+    TOKEN_PRIVILEGES tp;
+    LUID luid;
 
-    if (!OpenProcessToken(GetCurrentProcess(),
-                          TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken))
+    if (!LookupPrivilegeValue(NULL, lpszPrivilege, &luid))
     {
-        return false;
+        std::cerr << "LookupPrivilegeValue error: " << GetLastError() << std::endl;
+        return FALSE;
     }
 
-    LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &tkp.Privileges[0].Luid);
+    tp.PrivilegeCount = 1;
+    tp.Privileges[0].Luid = luid;
+    tp.Privileges[0].Attributes = bEnablePrivilege ? SE_PRIVILEGE_ENABLED : 0;
 
-    tkp.PrivilegeCount = 1;
-    tkp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-
-    AdjustTokenPrivileges(hToken, FALSE, &tkp, 0, (PTOKEN_PRIVILEGES)NULL, 0);
-
-    if (GetLastError() != ERROR_SUCCESS)
+    if (!AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES), NULL, NULL))
     {
-        return false;
+        std::cerr << "AdjustTokenPrivileges error: " << GetLastError() << std::endl;
+        return FALSE;
     }
 
-    return true;
+    if (GetLastError() == ERROR_NOT_ALL_ASSIGNED)
+    {
+        std::cerr << "The token does not have the specified privilege." << std::endl;
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+bool CheckPrivilege(HANDLE hToken, LPCTSTR lpszPrivilege)
+{
+    PRIVILEGE_SET privs;
+    LUID luid;
+    BOOL bResult = FALSE;
+
+    if (!LookupPrivilegeValue(NULL, lpszPrivilege, &luid))
+    {
+        std::cerr << "LookupPrivilegeValue error: " << GetLastError() << std::endl;
+        return FALSE;
+    }
+
+    privs.PrivilegeCount = 1;
+    privs.Control = PRIVILEGE_SET_ALL_NECESSARY;
+    privs.Privilege[0].Luid = luid;
+    privs.Privilege[0].Attributes = SE_PRIVILEGE_ENABLED;
+
+    if (!PrivilegeCheck(hToken, &privs, &bResult))
+    {
+        std::cerr << "PrivilegeCheck error: " << GetLastError() << std::endl;
+        return FALSE;
+    }
+
+    return bResult;
 }
