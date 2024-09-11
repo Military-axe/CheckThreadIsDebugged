@@ -1,0 +1,10 @@
+[package]
+name = "check_thread_is_debug"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.87"
+env_logger = "0.11.5"
+log = "0.4.22"
+windows = { version = "0.58.0", features = ["Wdk_System_SystemInformation", "Win32_Security", "Win32_System_Threading"] }
